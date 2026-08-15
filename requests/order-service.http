@@ -1,0 +1,5 @@
+### Order Service Health
+GET http://localhost:8081/actuator/health
+
+### Order Service Test
+GET http://localhost:8081/api/v1/orders/test
