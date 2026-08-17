@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: inventory-service
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    listener:
+      missing-topics-fatal: false
+    consumer:
+      group-id: inventory-service
+      auto-offset-reset: earliest
+
+      key-deserializer:
+        org.apache.kafka.common.serialization.StringDeserializer
+
+      value-deserializer:
+        org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+        key-serializer:
+          org.apache.kafka.common.serialization.StringSerializer
+        value-serializer:
+          org.apache.kafka.common.serialization.StringSerializer
+        value-deserializer:
+            org.apache.kafka.common.serialization.StringDeserializer
+        acks: all
+    properties:
+       #spring.json.trusted.packages: "com.cloudorder.inventory.event"
+       #spring.json.value.default.type: "com.cloudorder.inventory.event.OrderCreatedEvent"
+        spring.json.use.type.headers: false
+
+server:
+  port: 8082
+
+dynamodb:
+  table-name: cloud-inventory
+  endpoint: http://localhost:8000
+  region: ap-south-1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

@@ -2,7 +2,7 @@ spring:
   application:
     name: order-service
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: kafka:29092
 
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -20,7 +20,7 @@ aws:
 dynamodb:
   table-name: cloud-orders
   outbox-table-name: cloud-outbox
-  endpoint: http://localhost:8000
+  endpoint: http://dynamodb:8000
   region: ap-south-1
 management:
   endpoints:

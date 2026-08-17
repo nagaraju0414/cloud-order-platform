@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: order-service
+
+spec:
+  replicas: 3
+
+  selector:
+    matchLabels:
+      app: order-service
+
+  template:
+    metadata:
+      labels:
+        app: order-service
+
+    spec:
+      containers:
+        - name: order-service
+
+          image: cloudorder/order-service:latest
+
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 8081
+          resources:
+
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+          livenessProbe:
+              httpGet:
+                path: /actuator/health/liveness
+                port: 8081
+
+              initialDelaySeconds: 30
+              periodSeconds: 10
