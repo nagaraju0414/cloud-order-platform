@@ -19,7 +19,8 @@ aws:
 
 dynamodb:
   table-name: cloud-order
-
+  outbox-table-name: cloud-outbox
+  endpoint: http://localhost:8000
 
 management:
   endpoints:

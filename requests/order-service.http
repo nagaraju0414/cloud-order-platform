@@ -1,5 +1,25 @@
-### Order Service Health
-GET http://localhost:8081/actuator/health
+### Create Order
 
-### Order Service Test
-GET http://localhost:8081/api/v1/orders/test
+POST http://localhost:8081/api/v1/orders
+Content-Type: application/json
+
+{
+  "customerId": "C1001",
+  "items": [
+    {
+      "productId": "P100",
+      "quantity": 2,
+      "unitPrice": 999.00
+    },
+    {
+      "productId": "P200",
+      "quantity": 1,
+      "unitPrice": 499.00
+    }
+  ]
+}
+
+### Get Order
+GET http://localhost:8081/api/v1/orders/ORD-123
+### orders belonging to that customer.
+GET http://localhost:8081/api/v1/orders?customerId=C1001
