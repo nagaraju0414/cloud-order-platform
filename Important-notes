@@ -1,0 +1,1092 @@
+DAY 6 — Resilience & Distributed Transactions
+1. What is resilience in microservices?
+
+Resilience is the ability of a distributed system to continue providing acceptable functionality despite failures in dependencies, networks, infrastructure, or services.
+
+Typical resilience patterns:
+
+Timeout
+Retry
+Circuit Breaker
+Bulkhead
+Rate Limiting
+Fallback
+Dead Letter Queue
+2. What is a timeout?
+
+A timeout limits how long a service waits for a dependency.
+
+Order Service
+     |
+     ↓
+Payment Service
+     |
+   5 sec
+     |
+   TIMEOUT
+
+Without timeout:
+
+Threads
+  ↓
+waiting
+  ↓
+connection pool exhausted
+  ↓
+service failure
+Interview answer
+
+A timeout prevents indefinite waiting on downstream services and protects application threads, connection pools, and overall system availability.
+
+3. Why should timeout be configured before retry?
+
+Because retry without a timeout can cause a request to wait indefinitely.
+
+Example:
+
+Request
+ ↓
+Timeout
+ ↓
+Retry
+ ↓
+Timeout
+ ↓
+Retry
+
+Each attempt needs a bounded timeout.
+
+4. What is Retry?
+
+Retry means repeating an operation after a temporary failure.
+
+Good candidates:
+
+Network timeout
+503
+Temporary throttling
+Transient infrastructure failure
+
+Bad candidates:
+
+400
+401
+403
+Invalid business request
+5. What is exponential backoff?
+
+Instead of retrying immediately:
+
+1 sec
+1 sec
+1 sec
+
+increase the delay:
+
+100ms
+200ms
+400ms
+800ms
+
+It gives the downstream system time to recover.
+
+6. What is jitter?
+
+Jitter introduces randomness into retry delays.
+
+Without jitter:
+
+10,000 requests
+      ↓
+retry at exactly 1 second
+      ↓
+10,000 requests again
+
+This creates a retry storm.
+
+With jitter:
+
+1.1 sec
+1.3 sec
+1.7 sec
+1.2 sec
+...
+
+Requests are distributed over time.
+
+Senior answer
+
+I use exponential backoff with jitter to avoid synchronized retries and thundering-herd effects.
+
+7. What is a retry storm?
+
+A large number of clients retry simultaneously after a failure.
+
+Service fails
+     ↓
+10000 clients retry
+     ↓
+Service overloaded
+     ↓
+More failures
+     ↓
+More retries
+
+Solutions:
+
+Exponential Backoff
++
+Jitter
++
+Circuit Breaker
++
+Rate Limiting
+8. What is Circuit Breaker?
+
+Circuit Breaker prevents continuous calls to an unhealthy dependency.
+
+States:
+
+CLOSED
+   ↓ failures
+OPEN
+   ↓ wait
+HALF-OPEN
+   ↓
+SUCCESS → CLOSED
+FAILURE → OPEN
+CLOSED
+
+Requests flow normally.
+
+OPEN
+
+Requests fail fast without calling the dependency.
+
+HALF-OPEN
+
+A few test requests determine whether the dependency recovered.
+
+9. Why do we need Circuit Breaker if we already have Retry?
+
+Retry says:
+
+"Maybe this failure is temporary. Try again."
+
+Circuit Breaker says:
+
+"This dependency is unhealthy. Stop calling it for now."
+
+They solve different problems.
+
+Typical combination:
+
+Circuit Breaker
+       ↓
+Retry
+       ↓
+Timeout
+       ↓
+Downstream
+
+Configuration must be bounded to avoid multiplying latency.
+
+10. What is cascading failure?
+
+Failure of one service causes dependent services to fail.
+
+Payment
+   ↓
+slow
+   ↓
+Order threads blocked
+   ↓
+connection pool exhausted
+   ↓
+Order fails
+   ↓
+API Gateway affected
+
+Prevention:
+
+Timeout
+Circuit Breaker
+Bulkhead
+Rate Limiting
+Retry limits
+Async processing
+11. What is Bulkhead?
+
+Bulkhead isolates resources so failure in one dependency doesn't consume all application resources.
+
+Example:
+
+Application
+│
+├── Payment Pool     20
+├── Inventory Pool   20
+└── Other APIs       60
+
+Payment failure consumes only its allocated resources.
+
+12. What is Rate Limiting?
+
+Rate limiting controls how many requests a client can make.
+
+Example:
+
+100 requests/minute
+
+Request 101:
+
+HTTP 429
+
+Used to protect:
+
+application
+database
+Kafka
+downstream services
+external APIs
+13. Retry vs Circuit Breaker vs Timeout
+Pattern	Purpose
+Timeout	Stop waiting
+Retry	Try transient failure again
+Circuit Breaker	Stop calling unhealthy dependency
+Bulkhead	Isolate resources
+Rate Limiter	Control traffic
+DAY 6 — Saga & Distributed Transactions
+14. What is a distributed transaction?
+
+A business transaction spanning multiple independent services/databases.
+
+Example:
+
+Order DB
+Inventory DB
+Payment DB
+Shipping DB
+
+A single local database transaction cannot atomically cover all of them.
+
+15. Why don't we simply use one database transaction?
+
+Because microservices are intentionally independently owned.
+
+Using one transaction across services creates:
+
+tight coupling
+availability problems
+operational complexity
+long-running transactions
+
+Modern microservices generally use:
+
+Saga
++
+Eventual Consistency
++
+Compensation
+16. What is Saga?
+
+Saga breaks a distributed transaction into multiple local transactions.
+
+Example:
+
+Create Order
+     ↓
+Reserve Inventory
+     ↓
+Process Payment
+     ↓
+Create Shipment
+
+If a later step fails, compensation reverses earlier business actions.
+
+17. What is a compensation transaction?
+
+A business operation that reverses a previous operation.
+
+Examples:
+
+Payment completed
+      ↓
+Refund payment
+Inventory reserved
+      ↓
+Release inventory
+Order created
+      ↓
+Cancel order
+
+It is not the same as database rollback.
+
+18. Why can't compensation simply rollback the database?
+
+Because the original transaction may already have committed.
+
+For example:
+
+Inventory DB → COMMITTED
+Payment DB   → COMMITTED
+
+A later failure cannot execute:
+
+ROLLBACK Inventory DB
+
+Instead:
+
+Release Inventory
+19. Saga Choreography vs Orchestration
+Choreography
+
+Services communicate through events.
+
+Order
+ ↓
+Kafka
+ ↓
+Inventory
+ ↓
+Kafka
+ ↓
+Payment
+
+No central controller.
+
+Orchestration
+
+A central orchestrator controls the workflow.
+
+          Saga Orchestrator
+          /       |       \
+         ↓        ↓        ↓
+      Order   Inventory  Payment
+20. When would you choose choreography?
+
+Good for:
+
+simple workflows
+event-driven architecture
+loosely coupled services
+
+Problem:
+
+A → B → C → D → E
+
+can become difficult to understand when the workflow becomes complex.
+
+21. When would you choose orchestration?
+
+Good for:
+
+complex workflows
+many steps
+branching
+compensation
+timeouts
+business workflow visibility
+Senior answer
+
+I prefer choreography for simple event-driven workflows and orchestration when the business process has complex branching, compensation and workflow-state requirements.
+
+DAY 7 — Payment Service
+22. Why did we introduce Payment Service separately?
+
+Payment has its own:
+
+business rules
+persistence
+lifecycle
+external integrations
+security requirements
+failure scenarios
+
+Therefore it should have independent ownership.
+
+23. Why process payment after inventory reservation?
+
+Our chosen business workflow is:
+
+OrderCreated
+    ↓
+InventoryReserved
+    ↓
+Payment
+
+This prevents taking payment for an order that cannot be fulfilled due to insufficient inventory.
+
+This is a business decision, not a universal microservices rule.
+
+24. What happens if Payment Service is down?
+
+Kafka retains the event according to topic retention.
+
+Consumer eventually resumes:
+
+Kafka
+ ↓
+Payment Service unavailable
+
+
+...
+
+
+Payment Service recovers
+ ↓
+Consume event
+
+We should also have:
+
+Retry
+Backoff
+DLT
+Monitoring
+Idempotency
+25. Why do we use manual Kafka acknowledgement?
+
+We want:
+
+Process successfully
+      ↓
+ACK
+      ↓
+Offset committed
+
+rather than:
+
+Receive message
+      ↓
+Offset committed
+      ↓
+Processing fails
+
+This supports at-least-once processing.
+
+26. What happens if Payment Service crashes after processing but before ACK?
+
+Kafka may redeliver the event.
+
+Event
+ ↓
+Payment SUCCESS
+ ↓
+Crash
+ ↓
+No ACK
+ ↓
+Event redelivered
+
+Therefore Payment Service must be idempotent.
+
+27. What is idempotency?
+
+An operation is idempotent if performing it multiple times produces the same final business result.
+
+Example:
+
+PAYMENT-1001
+
+First request:
+
+Process payment
+
+Second request:
+
+Return existing result
+
+Not:
+
+Charge customer again
+28. How would you implement payment idempotency?
+
+Use an idempotency key:
+
+idempotencyKey = eventId
+
+Store it with the payment transaction.
+
+Before processing:
+
+Does eventId already exist?
+       |
+   +---+---+
+   |       |
+ YES      NO
+   |       |
+return    process
+existing
+
+For strong correctness, the check-and-create should itself be atomic.
+
+29. Why is eventId important?
+
+Because the same business event can be delivered multiple times.
+
+Example:
+
+OrderCreated
+eventId = EVT-10001
+
+If Kafka delivers it twice:
+
+EVT-10001
+EVT-10001
+
+we recognize the duplicate.
+
+30. Why shouldn't we generate a new idempotency key for every retry?
+
+Because then every retry looks like a new request.
+
+Bad:
+
+Retry 1 → KEY-1
+Retry 2 → KEY-2
+Retry 3 → KEY-3
+
+Good:
+
+Retry 1 → EVENT-1001
+Retry 2 → EVENT-1001
+Retry 3 → EVENT-1001
+
+The same logical operation must retain the same idempotency key.
+
+31. What if payment succeeds but PaymentCompleted isn't published?
+
+This is the dual-write problem.
+
+Payment DB
+   ↓
+SUCCESS
+
+
+Kafka
+   ↓
+FAILED
+
+Now:
+
+Payment = COMPLETED
+Order = PAYMENT_PENDING
+
+Solution:
+
+Payment DB Transaction
+       |
+       +── Payment
+       |
+       +── Outbox Event
+              ↓
+          Publisher
+              ↓
+            Kafka
+
+This is why Transactional Outbox is important.
+
+32. Why does Payment Service need its own database?
+
+Because each microservice should generally own its data.
+
+Order Service
+    ↓
+Order DB
+
+
+Inventory Service
+    ↓
+Inventory DB
+
+
+Payment Service
+    ↓
+Payment DB
+
+Avoid:
+
+All services
+     ↓
+Shared database
+
+because it creates tight coupling.
+
+DAY 8 — Saga Implementation
+33. What is the complete order workflow?
+
+Our implementation:
+
+OrderCreated
+     ↓
+InventoryReserved
+     ↓
+Payment
+     ↓
+PaymentCompleted
+     ↓
+Order COMPLETED
+34. What happens when inventory is insufficient?
+OrderCreated
+     ↓
+Inventory Service
+     ↓
+Insufficient Stock
+     ↓
+InventoryFailed
+     ↓
+Order CANCELLED
+
+No payment should be taken.
+
+35. What happens when payment fails after inventory reservation?
+OrderCreated
+     ↓
+InventoryReserved
+     ↓
+PaymentFailed
+     ↓
+Release Inventory
+     ↓
+InventoryReleased
+     ↓
+Order CANCELLED
+
+This is Saga compensation.
+
+36. Why must inventory release be idempotent?
+
+Suppose:
+
+PaymentFailed
+PaymentFailed
+
+is delivered twice.
+
+Without idempotency:
+
+Available = 7
+
+
+Release #1 → 10
+Release #2 → 13 ❌
+
+With reservation state:
+
+RESERVED
+   ↓
+RELEASED
+
+second release sees:
+
+Already RELEASED
+
+and does nothing.
+
+37. What is an inventory reservation?
+
+Instead of immediately permanently reducing stock, maintain a reservation.
+
+Example:
+
+Product P100
+
+
+Available = 10
+Reserved  = 0
+
+Reserve 3:
+
+Available = 7
+Reserved  = 3
+
+Payment succeeds:
+
+Reservation → CONFIRMED
+
+Payment fails:
+
+Reservation → RELEASED
+Available → 10
+
+This is safer than simply incrementing/decrementing stock without tracking reservation state.
+
+38. What is eventual consistency in our Saga?
+
+Immediately after:
+
+PaymentFailed
+
+you may temporarily have:
+
+Order        = PAYMENT_FAILED
+Inventory    = RESERVED
+
+A short time later:
+
+Order        = CANCELLED
+Inventory    = RELEASED
+
+The system converges.
+
+That's eventual consistency.
+
+39. What if the compensation itself fails?
+
+This is an important senior-level question.
+
+Example:
+
+PaymentFailed
+      ↓
+Release Inventory
+      ↓
+Inventory Service DOWN
+
+We shouldn't lose the compensation event.
+
+Use:
+
+Retry
++
+Persistent event
++
+DLT
++
+Monitoring
++
+Replay
+
+The compensation must eventually be retried until the business state is corrected, subject to appropriate operational/business limits.
+
+40. What if Kafka delivers an event twice?
+
+Don't assume exactly-once business processing.
+
+Design:
+
+At-least-once delivery
+        +
+Idempotent consumer
+
+This is one of the most important microservices design principles.
+
+41. What if events arrive out of order?
+
+Kafka guarantees ordering within a partition, not globally.
+
+Use an appropriate Kafka key.
+
+For example:
+
+key = orderId
+
+This ensures events for the same order are routed to the same partition.
+
+But consumers should still validate state transitions.
+
+Example:
+
+PAYMENT_COMPLETED
+
+should not blindly overwrite an already cancelled order.
+
+42. How do you prevent invalid state transitions?
+
+Use a state machine.
+
+Example:
+
+PENDING
+   ↓
+INVENTORY_RESERVED
+   ↓
+PAYMENT_PENDING
+   ↓
+COMPLETED
+
+Don't allow:
+
+CANCELLED
+   ↓
+COMPLETED
+
+unless the business explicitly permits that transition.
+
+43. What is a poison message?
+
+A message that repeatedly fails processing.
+
+Example:
+
+Kafka
+ ↓
+Consumer
+ ↓
+Exception
+ ↓
+Retry
+ ↓
+Exception
+ ↓
+Retry
+ ↓
+Exception
+
+Eventually:
+
+DLT
+44. What should a DLT message contain?
+
+At minimum:
+
+eventId
+originalTopic
+partition
+offset
+payload
+exception
+timestamp
+retryCount
+correlationId
+
+This makes troubleshooting and replay much easier.
+
+45. Should we blindly replay DLT messages?
+
+No.
+
+First determine:
+
+Why did processing fail?
+
+Fix the underlying issue.
+
+Then replay carefully.
+
+For example:
+
+DLT
+ ↓
+Fix consumer
+ ↓
+Validate event
+ ↓
+Replay
+ ↓
+Monitor
+
+Replay itself must be idempotent.
+
+46. How would you design the complete failure handling?
+
+A strong senior answer:
+
+"I would use timeouts for bounded dependency calls, retries with exponential backoff and jitter for transient failures, circuit breakers to prevent calls to unhealthy dependencies, and bulkheads to isolate resources. For cross-service business transactions, I would use a Saga with compensating actions. Kafka would provide asynchronous communication with at-least-once delivery, so consumers would be idempotent. For reliable database-to-event publication, I would use the transactional outbox pattern. Poison messages would be routed to a DLT with monitoring and replay support."
+
+47. Most Important Architecture Question
+"Design an order processing system using DynamoDB and Kafka."
+
+Your answer should be:
+
+                         Client
+                           |
+                           ↓
+                     Order Service
+                           |
+                    DynamoDB Transaction
+                       /           \
+                      /             \
+                  Order           Outbox
+                                   |
+                                   ↓
+                              Kafka
+                                   |
+                                   ↓
+                          Inventory Service
+                                   |
+                            Reserve Stock
+                                   |
+                                   ↓
+                         InventoryReserved
+                                   |
+                                   ↓
+                                Kafka
+                                   |
+                                   ↓
+                           Payment Service
+                                   |
+                              Payment DB
+                                   |
+                            +------+------+
+                            |             |
+                         Success        Failure
+                            |             |
+                            ↓             ↓
+                    PaymentCompleted  PaymentFailed
+                            |             |
+                            ↓             ↓
+                         Order       Inventory
+                       COMPLETED      RELEASE
+
+Then explain:
+
+Outbox
+Idempotency
+Conditional writes
+At-least-once
+Retry
+Timeout
+Circuit breaker
+Saga
+Compensation
+DLT
+
+That demonstrates system-level understanding, rather than just knowledge of individual technologies.
+
+48. Rapid-Fire Interview Questions
+
+Before an interview, quickly test yourself:
+
+Day 6
+What is timeout?
+What is retry?
+Why exponential backoff?
+Why jitter?
+What is retry storm?
+What is circuit breaker?
+Explain three circuit-breaker states.
+Retry vs circuit breaker?
+What is bulkhead?
+What is rate limiting?
+What is cascading failure?
+What is Saga?
+Choreography vs orchestration?
+What is compensation?
+Why not distributed 2PC?
+Day 7
+Why separate Payment Service?
+Why consume InventoryReserved?
+What happens when Payment Service crashes?
+What is idempotency?
+How do you prevent duplicate payment?
+What is an idempotency key?
+Why use the same key during retries?
+What happens if payment succeeds but Kafka publication fails?
+How does Outbox solve that?
+Why manual Kafka acknowledgement?
+What happens if processing succeeds but ACK fails?
+Why does Payment Service need its own database?
+What is at-least-once processing?
+Day 8
+Explain complete Order Saga.
+What happens if inventory reservation fails?
+What happens if payment fails?
+How do you release inventory?
+Why is compensation not rollback?
+Why must compensation be idempotent?
+What is eventual consistency?
+What if compensation fails?
+What if Kafka delivers duplicate events?
+What if events arrive out of order?
+How do you prevent invalid state transitions?
+What is a poison message?
+What is DLT?
+How do you safely replay DLT events?
+Where would you use Outbox?
+Where would you use Conditional Writes?
+Where would you use TransactWriteItems?
+49. 15 Questions You Absolutely Must Know
+
+If you have only 15 minutes before the interview, revise these:
+
+#	Question	Key words
+1	What is Circuit Breaker?	Closed/Open/Half-Open
+2	Retry vs Circuit Breaker?	Transient vs unhealthy dependency
+3	Why timeout?	Resource protection
+4	Why backoff + jitter?	Retry storm
+5	What is Bulkhead?	Resource isolation
+6	What is Saga?	Local transactions + compensation
+7	Choreography vs Orchestration?	Events vs coordinator
+8	What is compensation?	Business reversal
+9	What is idempotency?	Same result on duplicate
+10	Why at-least-once?	Reliability + duplicate handling
+11	What is Outbox?	Atomic DB + event
+12	What if Kafka ACK fails?	Redelivery + idempotency
+13	What if payment fails?	Release inventory
+14	What is eventual consistency?	Temporary inconsistency
+15	How do you handle poison events?	Retry + DLT + replay
+50. One-Minute Revision Card
+
+Memorize this flow:
+
+TIMEOUT
+   ↓
+Don't wait forever
+
+
+RETRY
+   ↓
+Transient failure
+
+
+BACKOFF + JITTER
+   ↓
+Prevent retry storm
+
+
+CIRCUIT BREAKER
+   ↓
+Stop calling unhealthy service
+
+
+BULKHEAD
+   ↓
+Isolate resources
+
+
+SAGA
+   ↓
+Distributed business transaction
+
+
+COMPENSATION
+   ↓
+Reverse business operation
+
+
+KAFKA
+   ↓
+Async event communication
+
+
+AT-LEAST-ONCE
+   ↓
+Duplicates possible
+
+
+IDEMPOTENCY
+   ↓
+Duplicates are safe
+
+
+OUTBOX
+   ↓
+Reliable DB → Kafka publication
+
+
+CONDITIONAL WRITE
+   ↓
+Prevent race conditions
+
+
+DLT
+   ↓
+Handle poison messages
+
+
+EVENTUAL CONSISTENCY
+   ↓
+Services converge
+The single senior-level principle to remember
+
+In distributed systems, assume that messages can be duplicated, services can fail, networks can timeout, events can be delayed, and operations can partially succeed. Design the system so that these failures are expected rather than exceptional.
