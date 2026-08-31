@@ -46,7 +46,7 @@ steps:
 
 substitutions:
   _REGION: 'asia-south1'
-  _REPOSITORY: 'cloud-order-platform'
+  _REPOSITORY: 'cloud-order-repo'
   _CLUSTER_NAME: 'cloud-order-platform-gke'
 
 options:
