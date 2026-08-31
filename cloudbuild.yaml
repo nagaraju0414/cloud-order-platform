@@ -1,12 +1,13 @@
 steps:
 
+  # 1. Test
   - name: 'maven:3.9-eclipse-temurin-17'
     entrypoint: 'mvn'
     args:
       - 'clean'
-      - 'package'
-      - '-DskipTests'
+      - 'test'
 
+  # 2. Build image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -14,16 +15,38 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/order-service:$SHORT_SHA'
       - './order-service'
 
+  # 3. Push image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/order-service:$SHORT_SHA'
 
+  # 4. Deploy to GKE
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'gcloud'
+    args:
+      - 'container'
+      - 'clusters'
+      - 'get-credentials'
+      - '${_CLUSTER_NAME}'
+      - '--region'
+      - '${_REGION}'
+
+  - name: 'gcr.io/cloud-builders/kubectl'
+    env:
+      - 'CLOUDSDK_COMPUTE_REGION=${_REGION}'
+      - 'CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER_NAME}'
+    args:
+      - 'set'
+      - 'image'
+      - 'deployment/order-service'
+      - 'order-service=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/order-service:$SHORT_SHA'
+      - '--namespace=cloud-order'
+
 substitutions:
   _REGION: 'asia-south1'
-  _REPOSITORY: 'cloud-order-repo'
+  _REPOSITORY: 'cloud-order-platform'
+  _CLUSTER_NAME: 'cloud-order-platform-gke'
 
-images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/order-service:$SHORT_SHA'
 options:
   logging: CLOUD_LOGGING_ONLY
