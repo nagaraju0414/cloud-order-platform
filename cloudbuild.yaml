@@ -21,7 +21,7 @@ steps:
 
 substitutions:
   _REGION: 'asia-south1'
-  _REPOSITORY: 'cloud-order-platform'
+  _REPOSITORY: 'cloud-order-repo'
 
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/order-service:$SHORT_SHA'
