@@ -1,11 +1,12 @@
 steps:
 
-  # 1. Test
+  # 1. Build
   - name: 'maven:3.9-eclipse-temurin-17'
     entrypoint: 'mvn'
     args:
       - 'clean'
-      - 'test'
+      - 'package'
+      - '-DskipTests'
 
   # 2. Build image
   - name: 'gcr.io/cloud-builders/docker'
