@@ -1,0 +1,80 @@
+spring:
+  application:
+    name: inventory-service
+
+  kafka:
+    bootstrap-servers:  ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+
+    consumer:
+      group-id: inventory-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+
+      properties:
+        spring.json.trusted.packages: com.cloudorder.*
+    producer:
+      key-serializer:
+        org.apache.kafka.common.serialization.StringSerializer
+      value-serializer:
+        org.apache.kafka.common.serialization.StringSerializer
+      value-deserializer:
+        org.apache.kafka.common.serialization.StringDeserializer
+      acks: all
+    properties:
+      #spring.json.trusted.packages: "com.cloudorder.inventory.event"
+      #spring.json.value.default.type: "com.cloudorder.inventory.event.OrderCreatedEvent"
+      spring.json.use.type.headers: false
+
+server:
+  port: 8082
+
+dynamodb:
+  table-name: cloud-inventory
+  endpoint: http://dynamodb:8000
+  region: ap-south-1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+resilience4j:
+
+  retry:
+    instances:
+      downstreamRetry:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+
+  circuitbreaker:
+    instances:
+      downstreamCircuitBreaker:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 5
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: true
+
+  timelimiter:
+    instances:
+      downstreamTimeout:
+        timeout-duration: 2s
+
+  bulkhead:
+    instances:
+      downstreamBulkhead:
+        max-concurrent-calls: 2
+        max-wait-duration: 500ms
+
+  logging:
+    level:
+      org.apache.kafka: ERROR
+      org.springframework.kafka: ERROR

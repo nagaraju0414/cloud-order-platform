@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloud-order-config
+  namespace: cloud-order
+data:
+  SPRING_PROFILES_ACTIVE: "docker"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  DYNAMODB_ENDPOINT: "http://dynamodb:8000"
+  DYNAMODB_REGION: "ap-south-1"
+  DYNAMODB_TABLE_NAME: "inventory"
+  CONFIG_SERVER_URL: "http://config-server:8888"
+  ORDER_SERVICE_URL: "http://order-service:8081"
+  INVENTORY_SERVICE_URL: "http://inventory-service:8082"

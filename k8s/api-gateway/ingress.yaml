@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+
+metadata:
+  name: cloud-order-ingress
+  namespace: cloud-order
+
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8085

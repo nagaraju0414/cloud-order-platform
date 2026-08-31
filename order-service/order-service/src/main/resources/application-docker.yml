@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: order-service
+  config:
+    import: optional:configserver:http://config-server:8888
+  cloud:
+    gateway:
+      routes:
+        - id: order-service
+          uri: http://order-service:8081
+          predicates:
+            - Path=/api/v1/**
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+      properties:
+        spring.json.add.type.headers: false
+
+server:
+  port: 8081
+
+inventory:
+  service:
+    url: http://inventory-service:8082/api/v1
+
+dynamodb:
+  table-name: cloud-orders
+  outbox-table-name: cloud-outbox
+  endpoint: http://dynamodb:8000
+  region: ap-south-1
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+  endpoint:
+    health:
+      probes:
+        enabled: true
+#logging:
+#  level:
+#    org.springframework.web: DEBUG
+#   software.amazon.awssdk: DEBUG
+#    software.amazon.awssdk.request: DEBUG
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{X-Correlation-ID}] [%thread] %logger{36} - %msg%n"
+restclient:
+  timelimiter:
+    instances:
+      inventoryTimeout:
+        timeout-duration: 2s
+  retry:
+    instances:
+      inventoryRetry:
+        max-attempts: 3
+        wait-duration: 1s
+  circuitbreaker:
+    instances:
+      inventoryCircuitBreaker:
+        sliding-window-type:
+          sliding-window-size: 5
+          minimum-number-of-calls: 5
+          failure-rate-threshold: 50
+          wait-duration-in-open-state: 10s
+          permitted-number-of-calls-in-half-open-state: 2

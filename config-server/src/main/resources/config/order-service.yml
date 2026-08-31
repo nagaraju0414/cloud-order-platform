@@ -1,0 +1,3 @@
+test:
+  config-server-message: "Hello Order Service from Config Server"
+  environment: docker

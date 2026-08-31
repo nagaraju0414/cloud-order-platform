@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: order-service
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+      properties:
+        spring.json.add.type.headers: false
+
+server:
+  port: 8081
+
+inventory:
+  service:
+    url: http://localhost:8082/api/v1
+
+dynamodb:
+  table-name: cloud-orders
+  outbox-table-name: cloud-outbox
+  endpoint: http://localhost:8000
+  region: ap-south-1
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+  endpoint:
+    health:
+      probes:
+        enabled: true
+logging:
+  level:
+    org.springframework.web: DEBUG
+    software.amazon.awssdk: DEBUG
+    software.amazon.awssdk.request: DEBUG

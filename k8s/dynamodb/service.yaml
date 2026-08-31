@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dynamodb
+  namespace: cloud-order
+spec:
+  selector:
+    app: dynamodb
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
